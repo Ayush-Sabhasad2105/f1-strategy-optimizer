@@ -54,12 +54,12 @@ export default function App() {
         if (data.length > 0) {
           const first = data[0];
           setSelectedTrack(first.circuit_name);
-          // Pre-fill params from the selected track
           setParams(p => ({
             ...p,
+            total_laps:    first.total_laps,
             base_lap_time: first.base_lap_time_ms,
-            pit_loss: first.pit_loss_ms,
-            deg_penalty: first.tire_deg_ms_per_lap,
+            pit_loss:      first.pit_loss_ms,
+            deg_penalty:   first.tire_deg_ms_per_lap,
           }));
         }
       })
@@ -73,9 +73,10 @@ export default function App() {
     if (track) {
       setParams(p => ({
         ...p,
+        total_laps:    track.total_laps,
         base_lap_time: track.base_lap_time_ms,
-        pit_loss: track.pit_loss_ms,
-        deg_penalty: track.tire_deg_ms_per_lap,
+        pit_loss:      track.pit_loss_ms,
+        deg_penalty:   track.tire_deg_ms_per_lap,
       }));
     }
     setResult(null);
@@ -134,7 +135,9 @@ export default function App() {
               onChange={e => handleTrackChange(e.target.value)}
             >
               {tracks.map(t => (
-                <option key={t.circuit_name} value={t.circuit_name}>{t.circuit_name}</option>
+                <option key={t.circuit_name} value={t.circuit_name}>
+                  {t.circuit_name} ({t.total_laps} Laps)
+                </option>
               ))}
             </select>
           </div>

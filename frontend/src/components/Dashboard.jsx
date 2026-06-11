@@ -125,11 +125,13 @@ function AiAdvantageBanner({ winner, timeAdv, riskRed, aiRuin, staticRuin }) {
 }
 
 // ── Dual Risk-of-Ruin Panel ───────────────────────────────────────────────────
-function DualRuinPanel({ aiRuin, staticRuin, riskReduction }) {
+function DualRuinPanel({ aiRuin, staticRuin, riskReduction, baselineLaps }) {
   const aiSafe     = aiRuin <= 10;
   const staticSafe = staticRuin <= 10;
   const aiColor    = aiSafe     ? "#22c55e" : "#ef4444";
   const staticColor = staticSafe ? "#22c55e" : "#ef4444";
+  const lapLabel   = baselineLaps && baselineLaps.length
+    ? `[Lap ${baselineLaps.join(", Lap ")}]` : "[Lap 19, Lap 38]";
 
   return (
     <div className="chart-card" style={{ padding: "20px 24px" }}>
@@ -200,7 +202,7 @@ function DualRuinPanel({ aiRuin, staticRuin, riskReduction }) {
           display: "flex", flexDirection: "column", gap: 6,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-muted)", fontWeight: 700 }}>
-            <Flag size={12} /> STATIC 2-STOP
+            <Flag size={12} /> STATIC 2-STOP {lapLabel}
           </div>
           <div style={{
             fontFamily: "'Orbitron', monospace",
@@ -317,7 +319,7 @@ export default function Dashboard({ result, tracks, selectedTrack, isLoading }) 
         <KpiCard
           label="Static 2-Stop Race Time"
           value={formatRaceTime(result.static_expected_time_s)}
-          sub="Fixed: Lap 19 & Lap 38 · no SC reaction"
+          sub={`Fixed: Lap ${result.baseline_laps ? result.baseline_laps.join(" & Lap ") : "19 & 38"} · no SC reaction`}
           accent="accent-blue"
           icon={<Flag size={18} />}
         />
@@ -343,6 +345,7 @@ export default function Dashboard({ result, tracks, selectedTrack, isLoading }) 
         aiRuin={result.ai_risk_of_ruin_pct}
         staticRuin={result.static_risk_of_ruin_pct}
         riskReduction={result.risk_reduction_pct}
+        baselineLaps={result.baseline_laps}
       />
 
       {/* ── MDP Reference Strategy strip ─────────────────────────────────── */}
@@ -364,10 +367,10 @@ export default function Dashboard({ result, tracks, selectedTrack, isLoading }) 
             </div>
             <div>
               <div style={{ fontSize: 11, color: "var(--accent-blue)", marginBottom: 6, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                <Flag size={11} /> Static Baseline (Lap 19 & 38)
+                <Flag size={11} /> Static Baseline {result.baseline_laps ? `[Lap ${result.baseline_laps.join(", Lap ")}]` : "[Lap 19, Lap 38]"}
               </div>
               <div className="pit-timeline">
-                {[19, 38].map(l => (
+                {(result.baseline_laps || [19, 38]).map(l => (
                   <span key={l} className="pit-chip baseline">L{l}</span>
                 ))}
               </div>
@@ -384,7 +387,9 @@ export default function Dashboard({ result, tracks, selectedTrack, isLoading }) 
             <div>
               <div className="chart-title">Monte Carlo Race Time Distribution</div>
               <div className="chart-subtitle">
-                10,000 simulations · Reactive AI (red, leaning left) vs Static 2-Stop (blue, fatter SC tail)
+                10,000 simulations · Reactive AI (red, leaning left) vs Static 2-Stop
+                {result.baseline_laps ? ` [Lap ${result.baseline_laps.join(", Lap ")}]` : " [Lap 19, Lap 38]"}
+                (blue, fatter SC tail)
               </div>
             </div>
             <div className="chart-legend">

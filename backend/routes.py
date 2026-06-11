@@ -63,13 +63,17 @@ class StrategyResponse(BaseModel):
     # ── Reference strategy from MDP trace ───────────────────────────────────
     mdp_reference_strategy: List[PitStopEvent]
 
+    # ── Dynamic baseline laps (1/3 and 2/3 of total_laps) ───────────────────
+    baseline_laps: List[int]
+
 
 class TrackInfo(BaseModel):
-    circuit_name:       str
-    cluster:            int
-    cluster_label:      str
-    base_lap_time_ms:   int
-    pit_loss_ms:        int
+    circuit_name:        str
+    cluster:             int
+    cluster_label:       str
+    total_laps:          int
+    base_lap_time_ms:    int
+    pit_loss_ms:         int
     tire_deg_ms_per_lap: int
 
 
@@ -102,6 +106,7 @@ def get_tracks():
             circuit_name=t["circuit_name"],
             cluster=t["cluster"],
             cluster_label=CLUSTER_LABELS[t["cluster"]],
+            total_laps=t["total_laps"],
             base_lap_time_ms=t["base_lap_time_ms"],
             pit_loss_ms=t["pit_loss_ms"],
             tire_deg_ms_per_lap=t["tire_deg_ms_per_lap"],
@@ -234,12 +239,17 @@ def compute_strategy(req: StrategyRequest):
     N             = 10_000
     ruin_threshold = req.base_lap_time * req.total_laps * 1.05
 
+    # Dynamic baseline: evenly-spaced 2-stop derived from total_laps
+    baseline_lap_1 = int(req.total_laps / 3)
+    baseline_lap_2 = int(2 * req.total_laps / 3)
+    baseline_laps  = [baseline_lap_1, baseline_lap_2]
+    static_laps    = set(baseline_laps)
+
     ai_results = [
         _patched_simulate(mdp_policy=mdp.policy) for _ in range(N)
     ]
 
-    # ── Step 4: 10 000 simulations — Static 2-Stop ───────────────────────────
-    static_laps    = {19, 38}
+    # ── Step 4: 10 000 simulations — Static 2-Stop (dynamic laps) ────────────
     static_results = [
         _patched_simulate(static_pit_laps=static_laps) for _ in range(N)
     ]
@@ -276,4 +286,5 @@ def compute_strategy(req: StrategyRequest):
         risk_reduction_pct=risk_red,
         winner=winner,
         mdp_reference_strategy=ref_events,
+        baseline_laps=baseline_laps,
     )
