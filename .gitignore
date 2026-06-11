@@ -23,6 +23,7 @@ ENV/
 # FastF1 cache
 fastf1_cache/
 /cache/
+src/..data/
 
 # Jupyter
 .ipynb_checkpoints/
