@@ -13,15 +13,16 @@ def main():
 
     simulator = RaceSimulator(total_laps, base_lap_time, pit_loss, deg_penalty)
 
-    print("--- Running Monte Carlo Simulations (1000 Seasons) ---")
+    num_seasons = 10000
+    print(f"--- Running Monte Carlo Simulations ({num_seasons} Seasons) ---")
 
     # Strategy 1: The MDP's Aggressive 3-Stop
     strat_3_stop = [16, 30, 44]
-    exp_time_3, risk_3 = simulator.run_monte_carlo("Aggressive 3-Stop", strat_3_stop, 1000, ruin_threshold)
+    exp_time_3, risk_3 = simulator.run_monte_carlo("Aggressive 3-Stop", strat_3_stop, num_seasons, ruin_threshold)
     
     # Strategy 2: A Conservative 2-Stop
     strat_2_stop = [19, 38]
-    exp_time_2, risk_2 = simulator.run_monte_carlo("Conservative 2-Stop", strat_2_stop, 1000, ruin_threshold)
+    exp_time_2, risk_2 = simulator.run_monte_carlo("Conservative 2-Stop", strat_2_stop, num_seasons, ruin_threshold)
 
     print("\n[ Results ]")
     print(f"Strategy: Aggressive 3-Stop {strat_3_stop}")

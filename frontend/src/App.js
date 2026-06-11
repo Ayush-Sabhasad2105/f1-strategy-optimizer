@@ -5,16 +5,14 @@ import { fetchTracks, computeStrategy } from "./api";
 import Dashboard from "./components/Dashboard";
 import { Sun, Moon } from "lucide-react";
 
-// Default param values
+// Default param values — mirrors StrategyRequest V3.0
 const DEFAULTS = {
-  total_laps: 57,
-  base_lap_time: 95000,
-  pit_loss: 24000,
-  deg_penalty: 200,
-  fumble_probability: 0.05,
-  fumble_time_ms: 5000,
-  // V2.0 elite strategy variables
-  sc_probability: 0.02,
+  total_laps:      57,
+  base_lap_time:   95000,
+  pit_loss:        24000,
+  deg_penalty:     200,
+  // V3.0 race-condition variables
+  sc_probability:  0.02,
   traffic_penalty: 1500,
 };
 
@@ -92,7 +90,17 @@ export default function App() {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await computeStrategy({ track_name: selectedTrack, ...params });
+      // Send only the 7 fields V3.0 StrategyRequest accepts
+      const payload = {
+        track_name:      selectedTrack,
+        total_laps:      params.total_laps,
+        base_lap_time:   params.base_lap_time,
+        pit_loss:        params.pit_loss,
+        deg_penalty:     params.deg_penalty,
+        sc_probability:  params.sc_probability,
+        traffic_penalty: params.traffic_penalty,
+      };
+      const res = await computeStrategy(payload);
       setResult(res);
     } catch (err) {
       setError(err.message);
@@ -189,39 +197,11 @@ export default function App() {
           </div>
         </div>
 
-        {/* Chaos Variables */}
+        {/* V3.0 Race Conditions */}
         <div className="sidebar-section">
-          <div className="sidebar-section-title">⚡ Chaos Variables</div>
-
-          <div className="form-group">
-            <label className="form-label">
-              Pit Fumble Prob. <span className="form-value">{(params.fumble_probability * 100).toFixed(0)}%</span>
-            </label>
-            <input
-              id="slider-fumble-prob"
-              type="range" min="0" max="0.20" step="0.005"
-              className="form-slider chaos"
-              value={params.fumble_probability}
-              onChange={e => handleParamChange("fumble_probability", e.target.value)}
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">
-              Fumble Time <span className="form-value">{(params.fumble_time_ms / 1000).toFixed(1)}s</span>
-            </label>
-            <input
-              id="slider-fumble-time"
-              type="range" min="0" max="10000" step="250"
-              className="form-slider chaos"
-              value={params.fumble_time_ms}
-              onChange={e => handleParamChange("fumble_time_ms", e.target.value)}
-            />
-          </div>
-
-          {/* V2.0 ── Safety Car & Dirty Air */}
-          <div className="chaos-divider">
-            <span>V2.0 — Race Conditions</span>
+          <div className="sidebar-section-title">⚡ Race Conditions <span style={{ color: "#f59e0b", fontSize: 9, letterSpacing: 1 }}>V3.0</span></div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 14, lineHeight: 1.5 }}>
+            Control stochastic race events. The Reactive AI automatically adapts; the Static 2-Stop cannot.
           </div>
 
           <div className="form-group">

@@ -2,206 +2,219 @@
 import React from "react";
 import {
   Flag, Timer, AlertTriangle, TrendingDown, Layers,
-  Trophy, ShieldAlert, ShieldCheck,
+  Cpu, ShieldCheck, ShieldAlert, Zap,
 } from "lucide-react";
 import KpiCard from "./KpiCard";
 import RiskDistributionChart from "./RiskDistributionChart";
 import TrackClusterChart from "./TrackClusterChart";
 
 function formatRaceTime(seconds) {
-  if (!seconds) return "—";
+  if (!seconds && seconds !== 0) return "—";
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = (seconds % 60).toFixed(1);
   return `${h}h ${m}m ${s}s`;
 }
 
-function buildStrategyLabel(events) {
-  if (!events || events.length === 0) return "0-Stop";
-  const laps = events.map(e => `L${e.lap}`).join(", ");
-  return `${events.length}-Stop: ${laps}`;
-}
+// ── AI Advantage Hero Card ────────────────────────────────────────────────────
+function AiAdvantageBanner({ winner, timeAdv, riskRed, aiRuin, staticRuin }) {
+  const isAiWin     = winner === "AI";
+  const isStaticWin = winner === "Static";
+  const isTie       = winner === "Tie";
 
-// ── Winner Banner ─────────────────────────────────────────────────────────────
-function WinnerBanner({ winner, timeDelta, mdpRuin, baselineRuin }) {
-  const config = {
-    MDP: {
-      label: "MDP Strategy Wins",
-      sub: `${Math.abs(timeDelta).toFixed(1)}s faster than baseline`,
-      color: "#e8002d",
-      glow: "rgba(232,0,45,0.18)",
-      icon: <Trophy size={20} />,
-      badge: "OPTIMAL",
-    },
-    Baseline: {
-      label: "Baseline Strategy Wins",
-      sub: `${Math.abs(timeDelta).toFixed(1)}s faster — consider fewer stops`,
-      color: "#00b4ff",
-      glow: "rgba(0,180,255,0.15)",
-      icon: <Trophy size={20} />,
-      badge: "BASELINE",
-    },
-    Tie: {
-      label: "Statistical Tie",
-      sub: `< 0.5s difference across 10,000 simulations`,
-      color: "#f59e0b",
-      glow: "rgba(245,158,11,0.15)",
-      icon: <Timer size={20} />,
-      badge: "TIE",
-    },
-  };
+  const accentColor = isAiWin ? "#e8002d" : isStaticWin ? "#00b4ff" : "#f59e0b";
+  const glowColor   = isAiWin
+    ? "rgba(232,0,45,0.12)"
+    : isStaticWin ? "rgba(0,180,255,0.10)" : "rgba(245,158,11,0.10)";
 
-  const c = config[winner] || config["Tie"];
+  const headlineIcon = isAiWin ? <Cpu size={22} /> : isStaticWin ? <Flag size={22} /> : <Timer size={22} />;
+  const headline     = isAiWin
+    ? "Reactive AI Wins"
+    : isStaticWin ? "Static 2-Stop Wins"
+    : "Statistical Tie";
+  const sub = isTie
+    ? "< 0.5 s separation across 10,000 simulations — strategies are equivalent at this SC rate"
+    : isAiWin
+      ? `AI is ${Math.abs(timeAdv).toFixed(2)} s faster on average`
+      : `Static is ${Math.abs(timeAdv).toFixed(2)} s faster — low SC rate favours commitment`;
 
   return (
     <div style={{
-      background: `linear-gradient(135deg, ${c.glow}, transparent)`,
-      border: `1px solid ${c.color}40`,
-      borderLeft: `4px solid ${c.color}`,
+      background: `linear-gradient(135deg, ${glowColor} 0%, transparent 70%)`,
+      border: `1px solid ${accentColor}35`,
+      borderLeft: `5px solid ${accentColor}`,
       borderRadius: "var(--radius-lg)",
-      padding: "18px 24px",
-      display: "flex",
+      padding: "20px 28px",
+      display: "grid",
+      gridTemplateColumns: "auto 1fr auto auto",
       alignItems: "center",
-      gap: 16,
+      gap: 20,
     }}>
+
+      {/* Icon circle */}
       <div style={{
-        width: 44, height: 44, borderRadius: "50%",
-        background: `${c.color}18`,
-        border: `2px solid ${c.color}40`,
+        width: 52, height: 52, borderRadius: "50%",
+        background: `${accentColor}14`,
+        border: `2px solid ${accentColor}30`,
         display: "flex", alignItems: "center", justifyContent: "center",
-        color: c.color, flexShrink: 0,
+        color: accentColor, flexShrink: 0,
       }}>
-        {c.icon}
+        {headlineIcon}
       </div>
-      <div style={{ flex: 1 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+
+      {/* Text */}
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 5 }}>
           <span style={{
-            fontFamily: "'Orbitron', monospace",
-            fontSize: 15,
-            fontWeight: 900,
-            color: c.color,
-            letterSpacing: 0.5,
+            fontFamily: "'Orbitron', monospace", fontSize: 16,
+            fontWeight: 900, color: accentColor, letterSpacing: 0.3,
           }}>
-            {c.label}
+            {headline}
           </span>
           <span style={{
-            fontSize: 10, fontWeight: 700, letterSpacing: 1.5,
-            padding: "2px 8px", borderRadius: 4,
-            background: `${c.color}20`, color: c.color,
-            border: `1px solid ${c.color}40`,
+            fontSize: 9, fontWeight: 800, letterSpacing: 2,
+            padding: "3px 8px", borderRadius: 4,
+            background: `${accentColor}18`, color: accentColor,
+            border: `1px solid ${accentColor}35`,
           }}>
-            {c.badge}
+            V3.0 REACTIVE AI
           </span>
         </div>
-        <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{c.sub}</div>
+        <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>{sub}</div>
       </div>
-      {/* Risk comparison pill */}
+
+      {/* Time advantage pill */}
       <div style={{
-        display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4,
-        fontSize: 11, color: "var(--text-muted)", flexShrink: 0,
+        display: "flex", flexDirection: "column", alignItems: "center",
+        background: `${accentColor}10`,
+        border: `1px solid ${accentColor}25`,
+        borderRadius: "var(--radius-md)",
+        padding: "10px 18px", gap: 2,
       }}>
-        <span>MDP ruin: <strong style={{ color: mdpRuin > 10 ? "#ef4444" : "#22c55e" }}>{mdpRuin.toFixed(1)}%</strong></span>
-        <span>Base ruin: <strong style={{ color: baselineRuin > 10 ? "#ef4444" : "#22c55e" }}>{baselineRuin.toFixed(1)}%</strong></span>
+        <div style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600, letterSpacing: 1 }}>TIME ADV.</div>
+        <div style={{
+          fontFamily: "'Orbitron', monospace", fontSize: 22,
+          fontWeight: 900, color: accentColor, lineHeight: 1,
+        }}>
+          {timeAdv >= 0 ? "+" : ""}{timeAdv.toFixed(2)}s
+        </div>
+        <div style={{ fontSize: 10, color: "var(--text-muted)" }}>Static − AI</div>
+      </div>
+
+      {/* Risk reduction pill */}
+      <div style={{
+        display: "flex", flexDirection: "column", alignItems: "center",
+        background: riskRed >= 0 ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)",
+        border: `1px solid ${riskRed >= 0 ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)"}`,
+        borderRadius: "var(--radius-md)",
+        padding: "10px 18px", gap: 2,
+      }}>
+        <div style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600, letterSpacing: 1 }}>RISK RED.</div>
+        <div style={{
+          fontFamily: "'Orbitron', monospace", fontSize: 22,
+          fontWeight: 900,
+          color: riskRed >= 0 ? "#22c55e" : "#ef4444",
+          lineHeight: 1,
+        }}>
+          {riskRed >= 0 ? "+" : ""}{riskRed.toFixed(1)}%
+        </div>
+        <div style={{ fontSize: 10, color: "var(--text-muted)" }}>AI vs Static ruin</div>
       </div>
     </div>
   );
 }
 
 // ── Dual Risk-of-Ruin Panel ───────────────────────────────────────────────────
-function DualRuinPanel({ mdpRuin, baselineRuin, ruinDelta }) {
-  const mdpSafe    = mdpRuin <= 10;
-  const baseSafe   = baselineRuin <= 10;
-  const mdpColor   = mdpSafe   ? "#22c55e" : "#ef4444";
-  const baseColor  = baseSafe  ? "#22c55e" : "#ef4444";
-  const deltaColor = ruinDelta >= 0 ? "#22c55e" : "#ef4444";  // positive = MDP safer
+function DualRuinPanel({ aiRuin, staticRuin, riskReduction }) {
+  const aiSafe     = aiRuin <= 10;
+  const staticSafe = staticRuin <= 10;
+  const aiColor    = aiSafe     ? "#22c55e" : "#ef4444";
+  const staticColor = staticSafe ? "#22c55e" : "#ef4444";
 
   return (
     <div className="chart-card" style={{ padding: "20px 24px" }}>
       <div style={{
-        fontSize: 11, fontWeight: 700,
-        color: "var(--text-muted)", textTransform: "uppercase",
-        letterSpacing: "1.5px", marginBottom: 16,
+        fontSize: 11, fontWeight: 700, color: "var(--text-muted)",
+        textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 16,
+        display: "flex", alignItems: "center", gap: 8,
       }}>
-        ⚠ Risk of Ruin — Both Strategies
+        <ShieldAlert size={13} /> Risk of Ruin — Reactive AI vs Static 2-Stop
+        <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--text-muted)", fontWeight: 400 }}>
+          Ruin = exceeding 5% over the theoretical race minimum
+        </span>
       </div>
 
       <div style={{ display: "flex", gap: 16, alignItems: "stretch" }}>
-        {/* MDP */}
+
+        {/* AI */}
         <div style={{
           flex: 1, padding: "16px 18px",
-          background: `${mdpColor}10`,
-          border: `1px solid ${mdpColor}30`,
+          background: `${aiColor}08`,
+          border: `1px solid ${aiColor}28`,
           borderRadius: "var(--radius-md)",
           display: "flex", flexDirection: "column", gap: 6,
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>
-            {mdpSafe ? <ShieldCheck size={13} /> : <ShieldAlert size={13} />}
-            MDP OPTIMAL
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-muted)", fontWeight: 700 }}>
+            <Cpu size={12} />  REACTIVE AI
           </div>
           <div style={{
             fontFamily: "'Orbitron', monospace",
-            fontSize: 28, fontWeight: 900, color: mdpColor, lineHeight: 1,
+            fontSize: 30, fontWeight: 900, color: aiColor, lineHeight: 1,
           }}>
-            {mdpRuin.toFixed(1)}%
+            {aiRuin.toFixed(1)}%
           </div>
           <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-            {mdpSafe ? "Within acceptable risk" : "High ruin probability"}
+            {aiSafe ? "✓ Within safe zone" : "⚠ Elevated risk"}
           </div>
-          {/* Mini bar */}
           <div style={{ height: 4, background: "var(--bg-elevated)", borderRadius: 2, marginTop: 4 }}>
             <div style={{
-              height: "100%", width: `${Math.min(mdpRuin, 100)}%`,
-              background: mdpColor, borderRadius: 2,
-              transition: "width 0.4s ease",
+              height: "100%", width: `${Math.min(aiRuin, 100)}%`,
+              background: aiColor, borderRadius: 2, transition: "width 0.4s ease",
             }} />
           </div>
         </div>
 
-        {/* Divider with delta */}
+        {/* Delta */}
         <div style={{
           display: "flex", flexDirection: "column", alignItems: "center",
-          justifyContent: "center", gap: 4, flexShrink: 0,
+          justifyContent: "center", gap: 4, flexShrink: 0, minWidth: 60,
         }}>
-          <div style={{ fontSize: 10, color: "var(--text-muted)" }}>DELTA</div>
+          <div style={{ fontSize: 9, color: "var(--text-muted)", letterSpacing: 1 }}>ΔRUIN</div>
           <div style={{
-            fontFamily: "'Orbitron', monospace",
-            fontSize: 15, fontWeight: 900,
-            color: deltaColor,
+            fontFamily: "'Orbitron', monospace", fontSize: 14, fontWeight: 900,
+            color: riskReduction >= 0 ? "#22c55e" : "#ef4444",
           }}>
-            {ruinDelta >= 0 ? "+" : ""}{ruinDelta.toFixed(1)}%
+            {riskReduction >= 0 ? "+" : ""}{riskReduction.toFixed(1)}%
           </div>
-          <div style={{ fontSize: 9, color: "var(--text-muted)", textAlign: "center", maxWidth: 48 }}>
-            {ruinDelta >= 0 ? "MDP safer" : "Base safer"}
+          <div style={{ fontSize: 9, color: "var(--text-muted)", textAlign: "center", maxWidth: 52 }}>
+            {riskReduction >= 0 ? "AI safer" : "Static safer"}
           </div>
         </div>
 
-        {/* Baseline */}
+        {/* Static */}
         <div style={{
           flex: 1, padding: "16px 18px",
-          background: `${baseColor}10`,
-          border: `1px solid ${baseColor}30`,
+          background: `${staticColor}08`,
+          border: `1px solid ${staticColor}28`,
           borderRadius: "var(--radius-md)",
           display: "flex", flexDirection: "column", gap: 6,
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>
-            {baseSafe ? <ShieldCheck size={13} /> : <ShieldAlert size={13} />}
-            BASELINE
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-muted)", fontWeight: 700 }}>
+            <Flag size={12} /> STATIC 2-STOP
           </div>
           <div style={{
             fontFamily: "'Orbitron', monospace",
-            fontSize: 28, fontWeight: 900, color: baseColor, lineHeight: 1,
+            fontSize: 30, fontWeight: 900, color: staticColor, lineHeight: 1,
           }}>
-            {baselineRuin.toFixed(1)}%
+            {staticRuin.toFixed(1)}%
           </div>
           <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-            {baseSafe ? "Within acceptable risk" : "High ruin probability"}
+            {staticSafe ? "✓ Within safe zone" : "⚠ Elevated risk"}
           </div>
-          {/* Mini bar */}
           <div style={{ height: 4, background: "var(--bg-elevated)", borderRadius: 2, marginTop: 4 }}>
             <div style={{
-              height: "100%", width: `${Math.min(baselineRuin, 100)}%`,
-              background: baseColor, borderRadius: 2,
-              transition: "width 0.4s ease",
+              height: "100%", width: `${Math.min(staticRuin, 100)}%`,
+              background: staticColor, borderRadius: 2, transition: "width 0.4s ease",
             }} />
           </div>
         </div>
@@ -217,7 +230,7 @@ export default function Dashboard({ result, tracks, selectedTrack, isLoading }) 
   if (isLoading) {
     return (
       <div className="dashboard-grid">
-        <div className="skeleton" style={{ height: 88, borderRadius: "var(--radius-lg)" }} />
+        <div className="skeleton" style={{ height: 100, borderRadius: "var(--radius-lg)" }} />
         <div className="kpi-row">
           {[1, 2, 3, 4].map(i => (
             <div key={i} className="kpi-card" style={{ minHeight: 110 }}>
@@ -227,7 +240,7 @@ export default function Dashboard({ result, tracks, selectedTrack, isLoading }) 
             </div>
           ))}
         </div>
-        <div className="skeleton" style={{ height: 120, borderRadius: "var(--radius-lg)" }} />
+        <div className="skeleton" style={{ height: 130, borderRadius: "var(--radius-lg)" }} />
         <div className="chart-grid">
           <div className="chart-card">
             <div className="skeleton" style={{ height: 14, width: "40%", marginBottom: 20 }} />
@@ -265,54 +278,55 @@ export default function Dashboard({ result, tracks, selectedTrack, isLoading }) 
         </div>
 
         <div className="empty-state">
-          <div className="empty-state-icon">🏎️</div>
-          <h3>Ready to Compute Strategy</h3>
-          <p>Select a Grand Prix, adjust parameters and chaos variables in the sidebar, then click <strong>Run Analysis</strong>.</p>
-          <p style={{ marginTop: 4, fontSize: 11, opacity: 0.6 }}>V2.0 — 3D MDP · Safety Car · Dirty Air · 10,000 Monte Carlo Simulations</p>
+          <div className="empty-state-icon">🤖</div>
+          <h3>Reactive AI Ready</h3>
+          <p>Select a Grand Prix, set race conditions, then click <strong>Run Analysis</strong>.</p>
+          <p style={{ marginTop: 6, fontSize: 11, opacity: 0.6 }}>
+            V3.0 · 3D MDP Policy Matrix · Live SC Reaction · 10,000 Monte Carlo Simulations
+          </p>
         </div>
       </div>
     );
   }
 
   // ── Results ───────────────────────────────────────────────────────────────
-  const stratLabel = buildStrategyLabel(result.optimal_strategy);
-  const deltaSign  = result.time_delta_s >= 0 ? "+" : "";
-  const deltaClass = result.time_delta_s >= 0 ? "positive" : "negative";
+  const aiDeltaSign  = result.time_advantage_s >= 0 ? "+" : "";
+  const aiDeltaClass = result.time_advantage_s >= 0 ? "positive" : "negative";
 
   return (
     <div className="dashboard-grid">
 
-      {/* ── Winner Banner ──────────────────────────────────────────────────── */}
-      <WinnerBanner
+      {/* ── AI Advantage Hero ─────────────────────────────────────────────── */}
+      <AiAdvantageBanner
         winner={result.winner}
-        timeDelta={result.time_delta_s}
-        mdpRuin={result.mdp_risk_of_ruin_pct}
-        baselineRuin={result.baseline_risk_of_ruin_pct}
+        timeAdv={result.time_advantage_s}
+        riskRed={result.risk_reduction_pct}
+        aiRuin={result.ai_risk_of_ruin_pct}
+        staticRuin={result.static_risk_of_ruin_pct}
       />
 
-      {/* ── KPI Row ────────────────────────────────────────────────────────── */}
+      {/* ── KPI Row ───────────────────────────────────────────────────────── */}
       <div className="kpi-row">
         <KpiCard
-          label="MDP Optimal Strategy"
-          value={stratLabel}
-          sub={`${result.stop_count} stop${result.stop_count !== 1 ? "s" : ""} · ${result.cluster_label}`}
+          label="Reactive AI Race Time"
+          value={formatRaceTime(result.ai_expected_time_s)}
+          sub="Expected · mean of 10,000 simulations"
           accent="accent-red"
-          large
+          icon={<Cpu size={18} />}
+        />
+        <KpiCard
+          label="Static 2-Stop Race Time"
+          value={formatRaceTime(result.static_expected_time_s)}
+          sub="Fixed: Lap 19 & Lap 38 · no SC reaction"
+          accent="accent-blue"
           icon={<Flag size={18} />}
         />
         <KpiCard
-          label="MDP Race Time"
-          value={formatRaceTime(result.mdp_expected_time_s)}
-          sub="Expected · mean of 10,000 simulations"
-          accent="accent-blue"
-          icon={<Timer size={18} />}
-        />
-        <KpiCard
-          label="Time Delta vs Baseline"
-          value={`${deltaSign}${result.time_delta_s.toFixed(1)}s`}
-          sub={result.time_delta_s >= 0 ? "MDP is faster" : "Baseline is faster"}
+          label="AI Time Advantage"
+          value={`${aiDeltaSign}${result.time_advantage_s.toFixed(2)}s`}
+          sub={result.time_advantage_s >= 0 ? "AI is faster" : "Static is faster at low SC rates"}
           accent="accent-green"
-          valueClass={deltaClass}
+          valueClass={aiDeltaClass}
           icon={<TrendingDown size={18} />}
         />
         <KpiCard
@@ -324,39 +338,43 @@ export default function Dashboard({ result, tracks, selectedTrack, isLoading }) 
         />
       </div>
 
-      {/* ── Dual Risk-of-Ruin Panel ────────────────────────────────────────── */}
+      {/* ── Dual Risk-of-Ruin Panel ───────────────────────────────────────── */}
       <DualRuinPanel
-        mdpRuin={result.mdp_risk_of_ruin_pct}
-        baselineRuin={result.baseline_risk_of_ruin_pct}
-        ruinDelta={result.ruin_delta_pct}
+        aiRuin={result.ai_risk_of_ruin_pct}
+        staticRuin={result.static_risk_of_ruin_pct}
+        riskReduction={result.risk_reduction_pct}
       />
 
-      {/* ── Pit-stop timeline strip ────────────────────────────────────────── */}
-      <div className="chart-card" style={{ padding: "16px 24px" }}>
-        <div style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 10, fontWeight: 700 }}>
-          Pit Stop Schedules
-        </div>
-        <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
-          <div>
-            <div style={{ fontSize: 11, color: "var(--accent-red)", marginBottom: 6, fontWeight: 600 }}>MDP Optimal</div>
-            <div className="pit-timeline">
-              {result.optimal_strategy.length === 0
-                ? <span className="pit-chip mdp">Zero-Stop</span>
-                : result.optimal_strategy.map(e => (
+      {/* ── MDP Reference Strategy strip ─────────────────────────────────── */}
+      {result.mdp_reference_strategy && result.mdp_reference_strategy.length > 0 && (
+        <div className="chart-card" style={{ padding: "16px 24px" }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 10, fontWeight: 700 }}>
+            MDP Policy Reference Schedule <span style={{ color: "var(--text-muted)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(AI deviates from this in real-time)</span>
+          </div>
+          <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontSize: 11, color: "var(--accent-red)", marginBottom: 6, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                <Cpu size={11} /> Reactive AI (deterministic trace)
+              </div>
+              <div className="pit-timeline">
+                {result.mdp_reference_strategy.map(e => (
                   <span key={e.lap} className="pit-chip mdp">L{e.lap}</span>
                 ))}
+              </div>
             </div>
-          </div>
-          <div>
-            <div style={{ fontSize: 11, color: "var(--accent-blue)", marginBottom: 6, fontWeight: 600 }}>Baseline (Even Split)</div>
-            <div className="pit-timeline">
-              {result.baseline_strategy.map(e => (
-                <span key={e.lap} className="pit-chip baseline">L{e.lap}</span>
-              ))}
+            <div>
+              <div style={{ fontSize: 11, color: "var(--accent-blue)", marginBottom: 6, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                <Flag size={11} /> Static Baseline (Lap 19 & 38)
+              </div>
+              <div className="pit-timeline">
+                {[19, 38].map(l => (
+                  <span key={l} className="pit-chip baseline">L{l}</span>
+                ))}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ── Chart Row ─────────────────────────────────────────────────────── */}
       <div className="chart-grid">
@@ -364,17 +382,19 @@ export default function Dashboard({ result, tracks, selectedTrack, isLoading }) 
         <div className="chart-card">
           <div className="chart-header">
             <div>
-              <div className="chart-title">Monte Carlo Risk Distribution</div>
-              <div className="chart-subtitle">10,000 simulated race outcomes — MDP vs Baseline · SC + Dirty Air included</div>
+              <div className="chart-title">Monte Carlo Race Time Distribution</div>
+              <div className="chart-subtitle">
+                10,000 simulations · Reactive AI (red, leaning left) vs Static 2-Stop (blue, fatter SC tail)
+              </div>
             </div>
             <div className="chart-legend">
-              <span className="legend-item"><span className="legend-dot" style={{ background: "#e8002d" }} />MDP Optimal</span>
-              <span className="legend-item"><span className="legend-dot" style={{ background: "#00b4ff" }} />Baseline</span>
+              <span className="legend-item"><span className="legend-dot" style={{ background: "#e8002d" }} />Reactive AI</span>
+              <span className="legend-item"><span className="legend-dot" style={{ background: "#00b4ff" }} />Static 2-Stop</span>
             </div>
           </div>
           <RiskDistributionChart
-            mdpData={result.mdp_sim_distribution}
-            baselineData={result.baseline_sim_distribution}
+            mdpData={result.ai_sim_distribution}
+            baselineData={result.static_sim_distribution}
           />
         </div>
 
