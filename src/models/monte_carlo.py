@@ -10,33 +10,51 @@ class RaceSimulator:
         
     def simulate_single_race(self, pit_laps):
         """Simulates one complete race with stochastic variables and Traffic Penalties."""
+
         total_time = 0
         tire_age = 0
         in_traffic_laps = 0  # NEW: Counter for dirty air
+
+        # Safety Car State
+        sc_active = False
+        sc_laps_remaining = 0
         
         for lap in range(1, self.total_laps + 1):
+
+            # Stochastic Safety Car Trigger (approx 2% chance per lap)
+            if not sc_active and np.random.random() < 0.02:
+                sc_active = True
+                sc_laps_remaining = np.random.randint(2, 6) # SC lasts 2 to 5 laps
+                
+            if sc_active:
+                sc_laps_remaining -= 1
+                if sc_laps_remaining <= 0:
+                    sc_active = False
+
             if lap in pit_laps:
                 # Stochastic Pit Stop: Mean of 24s, 5% chance of a 5s delay
                 pit_variance = np.random.normal(0, 500) 
                 fumble_risk = 5000 if np.random.random() < 0.05 else 0 
+
+                # CHEAP PIT STOP under Safety Car!
+                current_pit_loss = (self.pit_loss_mean / 2) if sc_active else self.pit_loss_mean
                 
-                lap_time = self.base_lap_time + self.pit_loss_mean + pit_variance + fumble_risk
+                lap_time = self.base_lap_time + current_pit_loss + pit_variance + fumble_risk
                 tire_age = 1
                 
                 # NEW: Emerge into traffic. You are stuck behind slower cars for the next 3 laps.
                 in_traffic_laps = 3 
+                
             else:
-                # Standard ambient variance
                 traffic_noise = np.random.normal(0, 300) 
+                dirty_air = np.random.normal(1500, 500) if in_traffic_laps > 0 else 0
                 
-                # NEW: Apply the Dirty Air Penalty
-                dirty_air_penalty = 0
-                if in_traffic_laps > 0:
-                    # Lose an average of 1.5 seconds per lap while trying to pass
-                    dirty_air_penalty = np.random.normal(1500, 500) 
-                    in_traffic_laps -= 1
+                if in_traffic_laps > 0: in_traffic_laps -= 1
                 
-                lap_time = self.base_lap_time + (tire_age * self.deg_penalty) + traffic_noise + dirty_air_penalty
+                # Laps are drastically slower under SC, neutralizing tire advantage
+                sc_lap_penalty = 25000 if sc_active else 0
+                
+                lap_time = self.base_lap_time + (tire_age * self.deg_penalty) + traffic_noise + dirty_air + sc_lap_penalty
                 tire_age += 1
                 
             total_time += lap_time

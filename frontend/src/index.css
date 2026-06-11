@@ -258,6 +258,41 @@ body {
   box-shadow: 0 0 8px var(--accent-blue-glow);
 }
 
+/* Safety Car slider — gold */
+.form-slider.sc {
+  background: linear-gradient(to right, #92400e, var(--bg-elevated));
+}
+.form-slider.sc::-webkit-slider-thumb {
+  background: #f59e0b;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+}
+.form-slider.sc::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.55);
+}
+
+.form-value.sc { color: #f59e0b !important; }
+
+/* Chaos section V2.0 divider */
+.chaos-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 12px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.chaos-divider::before,
+.chaos-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+.chaos-divider span { white-space: nowrap; color: #f59e0b; }
+
 /* CTA Button */
 .btn-analyze {
   width: 100%;

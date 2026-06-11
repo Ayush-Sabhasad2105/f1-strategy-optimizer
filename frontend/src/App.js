@@ -13,6 +13,9 @@ const DEFAULTS = {
   deg_penalty: 200,
   fumble_probability: 0.05,
   fumble_time_ms: 5000,
+  // V2.0 elite strategy variables
+  sc_probability: 0.02,
+  traffic_penalty: 1500,
 };
 
 export default function App() {
@@ -215,6 +218,37 @@ export default function App() {
               onChange={e => handleParamChange("fumble_time_ms", e.target.value)}
             />
           </div>
+
+          {/* V2.0 ── Safety Car & Dirty Air */}
+          <div className="chaos-divider">
+            <span>V2.0 — Race Conditions</span>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">
+              Safety Car Prob. <span className="form-value sc">{(params.sc_probability * 100).toFixed(1)}%</span>
+            </label>
+            <input
+              id="slider-sc-probability"
+              type="range" min="0" max="0.10" step="0.005"
+              className="form-slider sc"
+              value={params.sc_probability}
+              onChange={e => handleParamChange("sc_probability", e.target.value)}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">
+              Dirty Air Penalty <span className="form-value sc">{params.traffic_penalty} ms</span>
+            </label>
+            <input
+              id="slider-traffic-penalty"
+              type="range" min="0" max="3000" step="100"
+              className="form-slider sc"
+              value={params.traffic_penalty}
+              onChange={e => handleParamChange("traffic_penalty", e.target.value)}
+            />
+          </div>
         </div>
 
         {/* CTA */}
@@ -226,7 +260,7 @@ export default function App() {
             disabled={isLoading || !selectedTrack}
           >
             {isLoading
-              ? <><span className="loading-spinner" style={{ marginRight: 8 }} />Solving MDP…</>
+              ? <><span className="loading-spinner" style={{ marginRight: 8 }} />Solving 10k Sims…</>
               : "▶ Run Analysis"
             }
           </button>
