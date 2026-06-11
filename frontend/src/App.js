@@ -14,6 +14,7 @@ const DEFAULTS = {
   // V3.0 race-condition variables
   sc_probability:  0.02,
   traffic_penalty: 1500,
+  starting_tire:   "Medium",
 };
 
 export default function App() {
@@ -83,7 +84,7 @@ export default function App() {
   }, [tracks]);
 
   const handleParamChange = (key, value) => {
-    setParams(p => ({ ...p, [key]: parseFloat(value) }));
+    setParams(p => ({ ...p, [key]: key === "starting_tire" ? value : parseFloat(value) }));
   };
 
   const handleAnalyze = async () => {
@@ -100,6 +101,7 @@ export default function App() {
         deg_penalty:     params.deg_penalty,
         sc_probability:  params.sc_probability,
         traffic_penalty: params.traffic_penalty,
+        starting_tire:   params.starting_tire,
       };
       const res = await computeStrategy(payload);
       setResult(res);
@@ -146,6 +148,20 @@ export default function App() {
         {/* Race Parameters */}
         <div className="sidebar-section">
           <div className="sidebar-section-title">Race Parameters</div>
+
+          <div className="form-group">
+            <label className="form-label">Starting Tire</label>
+            <select
+              id="tire-select"
+              className="form-select"
+              value={params.starting_tire}
+              onChange={e => handleParamChange("starting_tire", e.target.value)}
+            >
+              <option value="Soft">Soft</option>
+              <option value="Medium">Medium</option>
+              <option value="Hard">Hard</option>
+            </select>
+          </div>
 
           <div className="form-group">
             <label className="form-label">

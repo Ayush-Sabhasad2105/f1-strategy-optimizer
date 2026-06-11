@@ -33,6 +33,8 @@ class StrategyRequest(BaseModel):
                                    description="Safety Car probability per lap (0–10%)")
     traffic_penalty: int   = Field(1500, ge=0,   le=3000,
                                    description="Dirty-air penalty per lap in ms")
+    # NEW: Added starting_tire to the incoming payload
+    starting_tire: str   = Field("Medium", description="Soft, Medium, or Hard")
 
 
 class PitStopEvent(BaseModel):
@@ -44,6 +46,7 @@ class StrategyResponse(BaseModel):
     track_name:    str
     cluster:       int
     cluster_label: str
+    starting_tire: str # NEW: Return the tire to the frontend
 
     # ── Reactive AI (MDP-guided live decisions) ──────────────────────────────
     ai_expected_time_s:   float
@@ -63,7 +66,7 @@ class StrategyResponse(BaseModel):
     # ── Reference strategy from MDP trace ───────────────────────────────────
     mdp_reference_strategy: List[PitStopEvent]
 
-    # ── Dynamic baseline laps (1/3 and 2/3 of total_laps) ───────────────────
+    # ── Dynamic baseline laps ───────────────────────────────────────────────
     baseline_laps: List[int]
 
 
@@ -117,24 +120,6 @@ def get_tracks():
 
 @router.post("/strategy/", response_model=StrategyResponse, tags=["Strategy"])
 def compute_strategy(req: StrategyRequest):
-    """
-    V3.0 — Reactive AI vs Static Baseline pipeline:
-
-    1. Solve the 3D MDP (lap × tire_age × traffic_laps) to produce a full
-       policy matrix. The `traffic_penalty` drives the dirty-air cost used
-       in backward induction.
-
-    2. Run 10,000 Monte Carlo simulations for the REACTIVE AI — the simulator
-       queries `mdp.policy` on every lap and optionally pits under a Safety Car
-       (Plan B logic: SC active + tire_age > 10 → cheap pit).
-
-    3. Run 10,000 Monte Carlo simulations for the STATIC BASELINE — a fixed
-       2-stop strategy (laps 19 & 38), which cannot react to Safety Cars.
-
-    The sc_probability and traffic_penalty from the request are patched into
-    the simulator before running so the user's slider values take effect.
-    """
-
     # ── Track context ────────────────────────────────────────────────────────
     track_info    = _get_track(req.track_name)
     cluster_id    = track_info["cluster"] if track_info else 0
@@ -145,12 +130,11 @@ def compute_strategy(req: StrategyRequest):
         total_laps=req.total_laps,
         base_lap_time=req.base_lap_time,
         pit_loss=req.pit_loss,
-        deg_penalty_per_lap=req.deg_penalty,
+        deg_penalty=req.deg_penalty,
     )
     mdp.traffic_penalty = req.traffic_penalty
     mdp.solve()
 
-    # Reference strategy trace (for display only — AI doesn't follow this rigidly)
     ref_strings  = mdp.get_optimal_strategy()
     ref_pit_laps = _parse_pit_laps(ref_strings)
     ref_events   = [PitStopEvent(lap=l, label=f"Lap {l}: PIT") for l in ref_pit_laps]
@@ -163,17 +147,11 @@ def compute_strategy(req: StrategyRequest):
         deg_penalty=req.deg_penalty,
     )
 
-    # Monkey-patch the two V3.0 user-controlled random parameters so the
-    # internal simulate_single_race() loop picks them up via self.*
-    # (The class uses hardcoded 0.02 / 1500 literals — we override them here
-    #  so sliders actually drive the simulation without altering the model file)
     original_simulate = simulator.simulate_single_race
-
     sc_prob     = req.sc_probability
     traffic_pen = req.traffic_penalty
 
     def _patched_simulate(mdp_policy=None, static_pit_laps=None):
-        """Drop-in replacement that respects the user's SC prob & dirty-air penalty."""
         total_time   = 0
         tire_age     = 0
         in_traffic   = 0
@@ -181,7 +159,6 @@ def compute_strategy(req: StrategyRequest):
         sc_remaining = 0
 
         for lap in range(1, req.total_laps + 1):
-            # Stochastic Safety Car — user-controlled probability
             if not sc_active and np.random.random() < sc_prob:
                 sc_active    = True
                 sc_remaining = int(np.random.randint(2, 6))
@@ -190,13 +167,11 @@ def compute_strategy(req: StrategyRequest):
                 if sc_remaining <= 0:
                     sc_active = False
 
-            # ── Decision ────────────────────────────────────────────────────
             is_pitting = False
             if mdp_policy is not None:
                 safe_age    = min(tire_age, req.total_laps)
                 safe_traffic = min(in_traffic, 3)
                 action_code = mdp_policy[lap - 1, safe_age, safe_traffic]
-                # Plan B: opportunistic SC pit if tires are old enough
                 if sc_active and tire_age > 10:
                     is_pitting = True
                 else:
@@ -204,7 +179,6 @@ def compute_strategy(req: StrategyRequest):
             elif static_pit_laps is not None:
                 is_pitting = (lap in static_pit_laps)
 
-            # ── Lap execution ────────────────────────────────────────────────
             if is_pitting:
                 pit_var   = np.random.normal(0, 500)
                 fumble    = 5000 if np.random.random() < 0.05 else 0
@@ -232,18 +206,22 @@ def compute_strategy(req: StrategyRequest):
 
         return total_time
 
-    # Swap in the patched version
     simulator.simulate_single_race = _patched_simulate
 
     # ── Step 3: 10 000 simulations — Reactive AI ─────────────────────────────
     N             = 10_000
     ruin_threshold = req.base_lap_time * req.total_laps * 1.05
 
-    # Dynamic baseline: evenly-spaced 2-stop derived from total_laps
-    baseline_lap_1 = int(req.total_laps / 3)
-    baseline_lap_2 = int(2 * req.total_laps / 3)
-    baseline_laps  = [baseline_lap_1, baseline_lap_2]
-    static_laps    = set(baseline_laps)
+    # NEW: DYNAMIC TIRE COMPOUND BASELINE LOGIC
+    total = req.total_laps
+    if req.starting_tire == "Soft":
+        baseline_laps = [int(total * 0.25), int(total * 0.60)]
+    elif req.starting_tire == "Hard":
+        baseline_laps = [int(total * 0.45), int(total * 0.80)]
+    else: # Medium
+        baseline_laps = [int(total * 0.33), int(total * 0.66)]
+        
+    static_laps = set(baseline_laps)
 
     ai_results = [
         _patched_simulate(mdp_policy=mdp.policy) for _ in range(N)
@@ -261,8 +239,8 @@ def compute_strategy(req: StrategyRequest):
     ai_ruin     = (sum(1 for r in ai_results     if r > ruin_threshold) / N) * 100
     static_ruin = (sum(1 for r in static_results if r > ruin_threshold) / N) * 100
 
-    time_adv  = round(static_avg_s - ai_avg_s, 3)   # positive = AI faster
-    risk_red  = round(static_ruin  - ai_ruin,  2)    # positive = AI safer
+    time_adv  = round(static_avg_s - ai_avg_s, 3)   
+    risk_red  = round(static_ruin  - ai_ruin,  2)    
 
     THRESHOLD = 0.5
     if abs(time_adv) < THRESHOLD:
@@ -276,6 +254,7 @@ def compute_strategy(req: StrategyRequest):
         track_name=req.track_name,
         cluster=cluster_id,
         cluster_label=cluster_label,
+        starting_tire=req.starting_tire,  # NEW: Return the tire in the payload
         ai_expected_time_s=round(ai_avg_s, 3),
         ai_risk_of_ruin_pct=round(ai_ruin, 2),
         ai_sim_distribution=[round(r / 1000.0, 3) for r in ai_results],

@@ -312,14 +312,14 @@ export default function Dashboard({ result, tracks, selectedTrack, isLoading }) 
         <KpiCard
           label="Reactive AI Race Time"
           value={formatRaceTime(result.ai_expected_time_s)}
-          sub="Expected · mean of 10,000 simulations"
+          sub={`Start: ${result.starting_tire || "Medium"} · mean of 10,000 sims`}
           accent="accent-red"
           icon={<Cpu size={18} />}
         />
         <KpiCard
           label="Static 2-Stop Race Time"
           value={formatRaceTime(result.static_expected_time_s)}
-          sub={`Fixed: Lap ${result.baseline_laps ? result.baseline_laps.join(" & Lap ") : "19 & 38"} · no SC reaction`}
+          sub={`Start: ${result.starting_tire || "Medium"} · Laps ${result.baseline_laps ? result.baseline_laps.join(" & ") : "19 & 38"}`}
           accent="accent-blue"
           icon={<Flag size={18} />}
         />
