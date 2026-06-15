@@ -142,6 +142,45 @@ export default function App() {
                 </option>
               ))}
             </select>
+
+            {/* Live DB info chip — shows for selected track */}
+            {(() => {
+              const t = tracks.find(x => x.circuit_name === selectedTrack);
+              if (!t) return null;
+              return (
+                <div style={{
+                  marginTop: 8,
+                  padding: "7px 10px",
+                  background: "rgba(16,185,129,0.07)",
+                  border: "1px solid rgba(16,185,129,0.20)",
+                  borderRadius: "var(--radius-md)",
+                  fontSize: 10,
+                  lineHeight: 1.7,
+                  color: "var(--text-muted)",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                    <span style={{
+                      width: 7, height: 7, borderRadius: "50%",
+                      background: ["#f59e0b","#8b5cf6","#10b981","#ef4444"][t.cluster] ?? "#888",
+                      flexShrink: 0,
+                    }} />
+                    <span style={{ fontWeight: 700, color: "var(--text-secondary)" }}>
+                      {t.cluster_label}
+                    </span>
+                    <span style={{
+                      marginLeft: "auto",
+                      fontSize: 9, fontWeight: 700,
+                      padding: "1px 5px",
+                      background: "rgba(16,185,129,0.12)",
+                      color: "#10b981",
+                      borderRadius: 3,
+                    }}>LIVE DB</span>
+                  </div>
+                  <div>Deg: <b>{t.tire_deg_ms_per_lap} ms/lap</b> · Pit Δ: <b>{(t.pit_loss_ms/1000).toFixed(1)}s</b></div>
+                  {t.data_points && <div style={{ opacity: 0.7 }}>Based on {t.data_points.toLocaleString()} telemetry laps</div>}
+                </div>
+              );
+            })()}
           </div>
         </div>
 
@@ -285,9 +324,12 @@ export default function App() {
                 : <><Moon size={14} />Dark Mode</>
               }
             </button>
-            <div className="status-badge">
+            <div className="status-badge" title="Track profiles powered by 7 years of FastF1 telemetry (2019–2025, excl. 2020)">
               <span className="status-dot" />
-              MDP + Monte Carlo Engine Active
+              {tracks.length > 0
+                ? `Multi-Year Ground Effect DB · ${tracks.length} Circuits`
+                : "MDP + Monte Carlo Engine Active"
+              }
             </div>
           </div>
         </div>

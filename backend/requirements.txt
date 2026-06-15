@@ -3,3 +3,8 @@ uvicorn[standard]==0.30.6
 pydantic==2.9.2
 numpy
 python-dotenv==1.0.1
+# Pipeline dependencies
+fastf1
+sqlalchemy
+psycopg2-binary
+
