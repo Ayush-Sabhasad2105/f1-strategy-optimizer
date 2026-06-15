@@ -41,34 +41,38 @@ CLUSTER_LABELS = {
 #   Low (80-130 ms/lap)    → 1-stop (late) → Monaco, Singapore, Italy, Baku
 #
 DEG_CALIBRATION = {
-    # ── High deg circuits (bumpy, abrasive, or thermal stress) ───────────────
-    "Qatar Grand Prix":             300,  # tyre cliff, multiple stops
-    "Spanish Grand Prix":           280,  # historically high deg
-    "Dutch Grand Prix":             260,  # abrasive Zandvoort surface
-    "Hungarian Grand Prix":         250,  # tight corners, mechanical deg
-    "Emilia Romagna Grand Prix":    240,  # bumpy Imola, abrasive kerbs
-    "São Paulo Grand Prix":         230,  # bumpy Interlagos
-    "Belgian Grand Prix":           210,  # high speed = high tyre stress
-    "Bahrain Grand Prix":           200,  # abrasive desert surface
-    "Japanese Grand Prix":          190,  # high mechanical load at Suzuka
-    # ── Medium deg circuits ──────────────────────────────────────────────────
-    "Australian Grand Prix":        170,  # moderate deg post-resurfacing
-    "British Grand Prix":           160,  # Silverstone can be aggressive
-    "Chinese Grand Prix":           160,  # mix of slow corners and high-speed
-    "United States Grand Prix":     160,  # COTA bumps, abrasive
-    "Mexico City Grand Prix":       150,  # high altitude reduces load
-    "French Grand Prix":            150,  # smooth Paul Ricard surface
-    "Austrian Grand Prix":          140,  # short lap, less total stress
-    "Miami Grand Prix":             140,  # moderate, surface improving
-    # ── Low deg circuits ─────────────────────────────────────────────────────
-    "Abu Dhabi Grand Prix":         120,  # smooth Yas Marina
-    "Canadian Grand Prix":          110,  # stop-start layout
-    "Singapore Grand Prix":         100,  # walls prevent pushing
-    "Monaco Grand Prix":             90,  # very smooth, low speed
-    "Italian Grand Prix":            90,  # monza: low downforce, low mech deg
-    "Azerbaijan Grand Prix":         85,  # smooth Baku, walls limit pace
-    "Saudi Arabian Grand Prix":      85,  # smooth Jeddah, high speed
-    "Las Vegas Grand Prix":          80,  # cold temps, smooth track
+    # Values calibrated against MDP linear cost model.
+    # Break-even formula:  t12 = 12 × pit_loss / T²  (1-stop vs 2-stop)
+    #                      t23 = 24 × pit_loss / T²  (2-stop vs 3-stop)
+    # 1-stop: deg < t12  |  2-stop: t12 < deg < t23  |  3-stop: deg > t23
+    #
+    # ── 1-stop circuits ──────────────────────────────────────────────────────
+    "Monaco Grand Prix":             28,   # t12=32.8  → comfortable 1-stop (78 laps)
+    "Canadian Grand Prix":           45,   # t12=53.7  → 1-stop (70 laps)
+    "Mexico City Grand Prix":        45,   # t12=52.2  → 1-stop (71 laps)
+    "Austrian Grand Prix":           45,   # t12=50.0  → 1-stop (71 laps)
+    "Abu Dhabi Grand Prix":          65,   # t12=79.3  → 1-stop (58 laps)
+    "Singapore Grand Prix":          80,   # t12=101.9 → 1-stop (62 laps, walls)
+    "Las Vegas Grand Prix":          80,   # t12=112.8 → 1-stop (50 laps)
+    "Italian Grand Prix":            85,   # t12=103.6 → 1-stop (53 laps, Monza)
+    "Azerbaijan Grand Prix":         85,   # t12=103.6 → 1-stop (51 laps, Baku)
+    "Saudi Arabian Grand Prix":     110,   # t12=127.8 → 1-stop (50 laps)
+    # ── 2-stop circuits ──────────────────────────────────────────────────────
+    "Bahrain Grand Prix":           130,   # t12=86.2,  t23=172.4 → solid 2-stop
+    "Australian Grand Prix":        130,   # t12=90.3,  t23=180.6 → 2-stop
+    "Chinese Grand Prix":           130,   # t12=87.0,  t23=174.0 → 2-stop
+    "British Grand Prix":           130,   # t12=92.8,  t23=185.6 → 2-stop
+    "French Grand Prix":            125,   # t12=84.8,  t23=169.6 → 2-stop
+    "Belgian Grand Prix":           160,   # t12=106.5, t23=213.0 → 2-stop (Spa)
+    "Japanese Grand Prix":          155,   # t12=103.0, t23=205.9 → 2-stop
+    "Miami Grand Prix":             110,   # t12=73.2,  t23=146.5 → 2-stop
+    "United States Grand Prix":     115,   # t12=74.9,  t23=149.9 → 2-stop (COTA)
+    "Dutch Grand Prix":              75,   # t12=53.7,  t23=107.4 → 2-stop (Zandvoort)
+    "Emilia Romagna Grand Prix":    135,   # t12=89.4,  t23=178.8 → 2-stop (Imola)
+    "Hungarian Grand Prix":          70,   # t12=48.7,  t23=97.4  → 2-stop (Hungary)
+    "Spanish Grand Prix":            90,   # t12=60.1,  t23=120.3 → 2-stop (Spain)
+    "São Paulo Grand Prix":          80,   # t12=53.4,  t23=106.9 → 2-stop (Interlagos)
+    "Qatar Grand Prix":             200,   # t12=135.3, t23=270.6 → solid 2-stop
 }
 
 
