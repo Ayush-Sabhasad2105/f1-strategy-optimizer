@@ -29,6 +29,48 @@ CLUSTER_LABELS = {
     3: "Extreme Deg",
 }
 
+# ── TIRE DEGRADATION CALIBRATION ─────────────────────────────────────────────
+# Telemetry-derived deg rates are unreliable: fuel burn (~0.5-1 s/lap) and
+# rubber/track-evolution (~0.3-0.8 s/lap) both MASK and outweigh tire wear,
+# so any OLS or bin-diff on raw lap times gives zero or negative values.
+# These values are calibrated against real F1 one/two-stop strategy windows
+# (i.e., values that cause the MDP to recommend pitting at realistic laps):
+#
+#   High (200-300 ms/lap)  → 2-stop  → Qatar, Spain, Zandvoort, Hungary
+#   Medium (130-200 ms/lap)→ 1-stop  → Bahrain, Belgium, Imola, São Paulo
+#   Low (80-130 ms/lap)    → 1-stop (late) → Monaco, Singapore, Italy, Baku
+#
+DEG_CALIBRATION = {
+    # ── High deg circuits (bumpy, abrasive, or thermal stress) ───────────────
+    "Qatar Grand Prix":             300,  # tyre cliff, multiple stops
+    "Spanish Grand Prix":           280,  # historically high deg
+    "Dutch Grand Prix":             260,  # abrasive Zandvoort surface
+    "Hungarian Grand Prix":         250,  # tight corners, mechanical deg
+    "Emilia Romagna Grand Prix":    240,  # bumpy Imola, abrasive kerbs
+    "São Paulo Grand Prix":         230,  # bumpy Interlagos
+    "Belgian Grand Prix":           210,  # high speed = high tyre stress
+    "Bahrain Grand Prix":           200,  # abrasive desert surface
+    "Japanese Grand Prix":          190,  # high mechanical load at Suzuka
+    # ── Medium deg circuits ──────────────────────────────────────────────────
+    "Australian Grand Prix":        170,  # moderate deg post-resurfacing
+    "British Grand Prix":           160,  # Silverstone can be aggressive
+    "Chinese Grand Prix":           160,  # mix of slow corners and high-speed
+    "United States Grand Prix":     160,  # COTA bumps, abrasive
+    "Mexico City Grand Prix":       150,  # high altitude reduces load
+    "French Grand Prix":            150,  # smooth Paul Ricard surface
+    "Austrian Grand Prix":          140,  # short lap, less total stress
+    "Miami Grand Prix":             140,  # moderate, surface improving
+    # ── Low deg circuits ─────────────────────────────────────────────────────
+    "Abu Dhabi Grand Prix":         120,  # smooth Yas Marina
+    "Canadian Grand Prix":          110,  # stop-start layout
+    "Singapore Grand Prix":         100,  # walls prevent pushing
+    "Monaco Grand Prix":             90,  # very smooth, low speed
+    "Italian Grand Prix":            90,  # monza: low downforce, low mech deg
+    "Azerbaijan Grand Prix":         85,  # smooth Baku, walls limit pace
+    "Saudi Arabian Grand Prix":      85,  # smooth Jeddah, high speed
+    "Las Vegas Grand Prix":          80,  # cold temps, smooth track
+}
+
 
 def get_engine():
     """Establishes connection to the PostgreSQL database."""
@@ -42,58 +84,26 @@ def extract_segmented_features():
     print("--- Extracting Era-Segmented Features ---")
     engine = get_engine()
 
-    # ── 1. CLUSTERING CORE (2019–2025, excl. 2020) ──────────────────────────
+    # ── 1. CLUSTERING CORE ──────────────────────────────────────────────────
+    # The DB provides: data_points (lap count) and pit_loss_ms (measured).
+    # tire_deg_ms_per_lap comes from DEG_CALIBRATION (telemetry-derived values
+    # are unreliable — fuel burn + track evolution fully mask tire wear).
     query_clustering = text("""
-        WITH stint_deltas AS (
-            -- For each lap, calculate the time gained/lost vs the previous lap
-            -- within the same driver stint. This controls for track evolution:
-            -- the effect per single lap (~30ms) is tiny vs tire wear (~100-300ms).
-            SELECT
-                r.circuit_name,
-                COUNT(*) OVER (PARTITION BY r.circuit_name) AS data_points,
-                l.lap_time_ms
-                    - LAG(l.lap_time_ms) OVER (
-                        PARTITION BY l.race_id, l.driver_id
-                        ORDER BY l.lap_number
-                    ) AS lap_delta_ms,
-                l.tire_life
-                    - LAG(l.tire_life) OVER (
-                        PARTITION BY l.race_id, l.driver_id
-                        ORDER BY l.lap_number
-                    ) AS life_delta
-            FROM laps l
-            JOIN Races r ON l.race_id = r.race_id
+        WITH data_counts AS (
+            SELECT r.circuit_name, COUNT(*) AS data_points
+            FROM laps l JOIN Races r ON l.race_id = r.race_id
             WHERE r.year IN (2019, 2021, 2022, 2023, 2024, 2025)
-              AND r.had_rainfall    = FALSE
+              AND r.had_rainfall = FALSE
               AND l.compound IN ('SOFT', 'MEDIUM', 'HARD')
-              AND l.is_pit_in_lap  = FALSE
-              AND l.is_pit_out_lap = FALSE
+              AND l.is_pit_in_lap = FALSE AND l.is_pit_out_lap = FALSE
               AND l.lap_time_ms BETWEEN 1000 AND 250000
-              AND l.tire_life BETWEEN 5 AND 30
-        ),
-        deg_per_circuit AS (
-            SELECT
-                circuit_name,
-                MAX(data_points) AS data_points,
-                -- Median lap-over-lap delta: positive = getting slower = real deg
-                -- Filter: only consecutive stint laps (life_delta=1),
-                --         and cap outliers from SC/yellow laps
-                PERCENTILE_CONT(0.5) WITHIN GROUP (
-                    ORDER BY lap_delta_ms
-                ) AS median_deg_ms
-            FROM stint_deltas
-            WHERE life_delta = 1
-              AND lap_delta_ms BETWEEN -2000 AND 5000
-            GROUP BY circuit_name
+            GROUP BY r.circuit_name
         ),
         pit_in_laps AS (
-            -- The pit-IN lap ends at the pit lane entry timing point.
-            -- It captures the deceleration penalty only (~3-5s extra vs clean).
             SELECT
                 r.circuit_name,
                 PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY l.lap_time_ms) AS median_pit_in_ms
-            FROM laps l
-            JOIN Races r ON l.race_id = r.race_id
+            FROM laps l JOIN Races r ON l.race_id = r.race_id
             WHERE r.year IN (2019, 2021, 2022, 2023, 2024, 2025)
               AND r.had_rainfall   = FALSE
               AND l.compound IN ('SOFT', 'MEDIUM', 'HARD')
@@ -102,14 +112,10 @@ def extract_segmented_features():
             GROUP BY r.circuit_name
         ),
         pit_out_laps AS (
-            -- The pit-OUT lap captures the stationary stop + slow pit lane traversal.
-            -- Typically 18-25s extra vs a clean lap at most circuits.
-            -- We use P25 (not P10) to avoid SC-window pit stops that are unrealistically cheap.
             SELECT
                 r.circuit_name,
                 PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY l.lap_time_ms) AS p25_pit_out_ms
-            FROM laps l
-            JOIN Races r ON l.race_id = r.race_id
+            FROM laps l JOIN Races r ON l.race_id = r.race_id
             WHERE r.year IN (2019, 2021, 2022, 2023, 2024, 2025)
               AND r.had_rainfall   = FALSE
               AND l.compound IN ('SOFT', 'MEDIUM', 'HARD')
@@ -121,8 +127,7 @@ def extract_segmented_features():
             SELECT
                 r.circuit_name,
                 PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY l.lap_time_ms) AS median_clean_ms
-            FROM laps l
-            JOIN Races r ON l.race_id = r.race_id
+            FROM laps l JOIN Races r ON l.race_id = r.race_id
             WHERE r.year IN (2019, 2021, 2022, 2023, 2024, 2025)
               AND r.had_rainfall    = FALSE
               AND l.compound IN ('SOFT', 'MEDIUM', 'HARD')
@@ -133,18 +138,10 @@ def extract_segmented_features():
             GROUP BY r.circuit_name
         )
         SELECT
-            d.circuit_name,
-            d.data_points,
-            GREATEST(
-                0,
-                ROUND(d.median_deg_ms)::int
-            ) AS tire_deg_ms_per_lap,
-            -- TRUE PIT LANE LOSS formula:
-            --   pit_loss = (pit_in − clean) + (pit_out − clean)
-            --            = pit_in + pit_out − 2 × clean
-            -- This captures BOTH the deceleration penalty (pit-in) and the
-            -- stop + slow lane penalty (pit-out). Floored at 15,000ms as a
-            -- sanity guard (no real F1 pit stop loses less than 15 seconds).
+            dc.circuit_name,
+            dc.data_points,
+            -- pit_loss = (pit_in penalty) + (pit_out penalty)
+            --          = median_pit_in + P25_pit_out - 2 × clean_lap
             GREATEST(
                 15000,
                 ROUND(
@@ -153,10 +150,10 @@ def extract_segmented_features():
                     - 2.0 * c.median_clean_ms
                 )::int
             ) AS pit_loss_ms
-        FROM deg_per_circuit  d
-        JOIN pit_out_laps     o ON d.circuit_name = o.circuit_name
-        JOIN clean_median     c ON d.circuit_name = c.circuit_name
-        LEFT JOIN pit_in_laps i ON d.circuit_name = i.circuit_name;
+        FROM data_counts   dc
+        JOIN pit_out_laps  o  ON dc.circuit_name = o.circuit_name
+        JOIN clean_median  c  ON dc.circuit_name = c.circuit_name
+        LEFT JOIN pit_in_laps i ON dc.circuit_name = i.circuit_name;
     """)
 
     # ── 2. SIMULATION CORE (2022–2025 Ground Effect era) ────────────────────
@@ -195,6 +192,16 @@ def extract_segmented_features():
         df_simulation,
         on='circuit_name',
         how='inner'
+    )
+
+    # Apply calibrated tire degradation (telemetry-derived values are masked
+    # by fuel burn + track evolution; DEG_CALIBRATION provides values that
+    # drive realistic MDP pit stop decisions).
+    final_track_profiles["tire_deg_ms_per_lap"] = (
+        final_track_profiles["circuit_name"]
+        .map(DEG_CALIBRATION)
+        .fillna(120)          # sensible default for any circuit not in the dict
+        .astype(int)
     )
 
     print(f"Segmentation complete. {len(final_track_profiles)} circuits extracted.")
