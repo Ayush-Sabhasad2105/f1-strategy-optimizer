@@ -25,7 +25,7 @@ TOTAL_LAPS_MAP = {
 CLUSTER_LABELS = {
     0: "Power Circuit",
     1: "Technical/Street",
-    2: "Long Pit Lane",
+    2: "High Degradation",
     3: "Extreme Deg",
 }
 
@@ -231,9 +231,10 @@ def persist_track_profiles(df: pd.DataFrame, engine):
     df     = df.copy()
     df["cluster"] = kmeans.fit_predict(X_scaled)
 
-    # Relabel clusters deterministically by ascending mean pit_loss_ms
-    cluster_mean_pit = df.groupby("cluster")["pit_loss_ms"].mean().sort_values()
-    remap = {old: new for new, old in enumerate(cluster_mean_pit.index)}
+    # Relabel clusters deterministically by ascending mean tire_deg_ms_per_lap
+    # (clusters are now primarily separated on deg axis, not pit_loss axis)
+    cluster_mean_deg = df.groupby("cluster")["tire_deg_ms_per_lap"].mean().sort_values()
+    remap = {old: new for new, old in enumerate(cluster_mean_deg.index)}
     df["cluster"]       = df["cluster"].map(remap)
     df["cluster_label"] = df["cluster"].map(CLUSTER_LABELS)
 
