@@ -6,7 +6,7 @@ import {
 } from "recharts";
 
 const CLUSTER_COLORS = ["#f59e0b", "#8b5cf6", "#10b981", "#ef4444"];
-const CLUSTER_LABELS = ["Power Circuit", "Technical/Street", "Long Pit Lane", "Extreme Deg"];
+const CLUSTER_LABELS = ["Power Circuit", "Technical/Street", "High Degradation", "Extreme Deg"];
 
 const CustomTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;

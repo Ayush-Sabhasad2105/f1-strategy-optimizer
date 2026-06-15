@@ -271,7 +271,7 @@ export default function Dashboard({ result, tracks, selectedTrack, isLoading }) 
               <div className="chart-legend">
                 <span className="legend-item"><span className="legend-dot" style={{ background: "#f59e0b" }} />Power</span>
                 <span className="legend-item"><span className="legend-dot" style={{ background: "#8b5cf6" }} />Technical</span>
-                <span className="legend-item"><span className="legend-dot" style={{ background: "#10b981" }} />Long Pit</span>
+                <span className="legend-item"><span className="legend-dot" style={{ background: "#10b981" }} />High Deg</span>
                 <span className="legend-item"><span className="legend-dot" style={{ background: "#ef4444" }} />Extreme Deg</span>
               </div>
             </div>
