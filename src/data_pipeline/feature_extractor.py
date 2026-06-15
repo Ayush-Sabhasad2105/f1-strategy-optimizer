@@ -87,17 +87,34 @@ def extract_segmented_features():
             GROUP BY circuit_name
         ),
         pit_in_laps AS (
+            -- The pit-IN lap ends at the pit lane entry timing point.
+            -- It captures the deceleration penalty only (~3-5s extra vs clean).
             SELECT
                 r.circuit_name,
-                PERCENTILE_CONT(0.1) WITHIN GROUP (ORDER BY l.lap_time_ms) AS p10_pit_in_ms
+                PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY l.lap_time_ms) AS median_pit_in_ms
             FROM laps l
             JOIN Races r ON l.race_id = r.race_id
             WHERE r.year IN (2019, 2021, 2022, 2023, 2024, 2025)
-              AND r.had_rainfall  = FALSE
+              AND r.had_rainfall   = FALSE
               AND l.compound IN ('SOFT', 'MEDIUM', 'HARD')
-              AND l.is_pit_in_lap = TRUE
-              AND l.lap_time_ms   > 0
-              AND l.lap_time_ms   < 250000
+              AND l.is_pit_in_lap  = TRUE
+              AND l.lap_time_ms    BETWEEN 1000 AND 250000
+            GROUP BY r.circuit_name
+        ),
+        pit_out_laps AS (
+            -- The pit-OUT lap captures the stationary stop + slow pit lane traversal.
+            -- Typically 18-25s extra vs a clean lap at most circuits.
+            -- We use P25 (not P10) to avoid SC-window pit stops that are unrealistically cheap.
+            SELECT
+                r.circuit_name,
+                PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY l.lap_time_ms) AS p25_pit_out_ms
+            FROM laps l
+            JOIN Races r ON l.race_id = r.race_id
+            WHERE r.year IN (2019, 2021, 2022, 2023, 2024, 2025)
+              AND r.had_rainfall   = FALSE
+              AND l.compound IN ('SOFT', 'MEDIUM', 'HARD')
+              AND l.is_pit_out_lap = TRUE
+              AND l.lap_time_ms    BETWEEN 1000 AND 250000
             GROUP BY r.circuit_name
         ),
         clean_median AS (
@@ -122,13 +139,24 @@ def extract_segmented_features():
                 0,
                 ROUND(d.median_deg_ms)::int
             ) AS tire_deg_ms_per_lap,
+            -- TRUE PIT LANE LOSS formula:
+            --   pit_loss = (pit_in − clean) + (pit_out − clean)
+            --            = pit_in + pit_out − 2 × clean
+            -- This captures BOTH the deceleration penalty (pit-in) and the
+            -- stop + slow lane penalty (pit-out). Floored at 15,000ms as a
+            -- sanity guard (no real F1 pit stop loses less than 15 seconds).
             GREATEST(
-                0,
-                ROUND(p.p10_pit_in_ms - c.median_clean_ms)::int
+                15000,
+                ROUND(
+                    COALESCE(i.median_pit_in_ms, c.median_clean_ms)
+                    + o.p25_pit_out_ms
+                    - 2.0 * c.median_clean_ms
+                )::int
             ) AS pit_loss_ms
         FROM deg_per_circuit  d
-        JOIN pit_in_laps      p ON d.circuit_name = p.circuit_name
-        JOIN clean_median     c ON d.circuit_name = c.circuit_name;
+        JOIN pit_out_laps     o ON d.circuit_name = o.circuit_name
+        JOIN clean_median     c ON d.circuit_name = c.circuit_name
+        LEFT JOIN pit_in_laps i ON d.circuit_name = i.circuit_name;
     """)
 
     # ── 2. SIMULATION CORE (2022–2025 Ground Effect era) ────────────────────
