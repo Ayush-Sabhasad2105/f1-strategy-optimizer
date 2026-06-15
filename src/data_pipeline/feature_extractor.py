@@ -44,12 +44,23 @@ def extract_segmented_features():
 
     # ── 1. CLUSTERING CORE (2019–2025, excl. 2020) ──────────────────────────
     query_clustering = text("""
-        WITH clean_laps AS (
+        WITH stint_deltas AS (
+            -- For each lap, calculate the time gained/lost vs the previous lap
+            -- within the same driver stint. This controls for track evolution:
+            -- the effect per single lap (~30ms) is tiny vs tire wear (~100-300ms).
             SELECT
                 r.circuit_name,
-                l.compound,
-                l.tire_life,
+                COUNT(*) OVER (PARTITION BY r.circuit_name) AS data_points,
                 l.lap_time_ms
+                    - LAG(l.lap_time_ms) OVER (
+                        PARTITION BY l.race_id, l.driver_id
+                        ORDER BY l.lap_number
+                    ) AS lap_delta_ms,
+                l.tire_life
+                    - LAG(l.tire_life) OVER (
+                        PARTITION BY l.race_id, l.driver_id
+                        ORDER BY l.lap_number
+                    ) AS life_delta
             FROM laps l
             JOIN Races r ON l.race_id = r.race_id
             WHERE r.year IN (2019, 2021, 2022, 2023, 2024, 2025)
@@ -57,43 +68,27 @@ def extract_segmented_features():
               AND l.compound IN ('SOFT', 'MEDIUM', 'HARD')
               AND l.is_pit_in_lap  = FALSE
               AND l.is_pit_out_lap = FALSE
-              AND l.lap_time_ms    > 0
-              AND l.lap_time_ms    < 250000  -- cap outliers (>4 min = SC/flag laps)
+              AND l.lap_time_ms BETWEEN 1000 AND 250000
+              AND l.tire_life BETWEEN 5 AND 30
         ),
-        early_stint AS (
-            -- Median lap time for MEDIUM tires, fresh (laps 3–8)
-            -- Must use a single compound to avoid cross-compound bias:
-            -- Softs are only at low tire_life, Hards only at high tire_life,
-            -- so mixing compounds makes early/late medians incomparable.
+        deg_per_circuit AS (
             SELECT
                 circuit_name,
-                PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY lap_time_ms) AS med_early
-            FROM clean_laps
-            WHERE tire_life BETWEEN 3 AND 8
-              AND compound = 'MEDIUM'
-            GROUP BY circuit_name
-        ),
-        late_stint AS (
-            -- Median lap time for MEDIUM tires, well worn (laps 20–35)
-            -- Modern 18-inch F1 tires are essentially flat in the first 20 laps;
-            -- the degradation signal only emerges in the 20-35 lap window.
-            SELECT
-                circuit_name,
-                PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY lap_time_ms) AS med_late
-            FROM clean_laps
-            WHERE tire_life BETWEEN 20 AND 35
-              AND compound = 'MEDIUM'
-            GROUP BY circuit_name
-        ),
-        data_counts AS (
-            SELECT circuit_name, COUNT(*) AS data_points
-            FROM clean_laps
+                MAX(data_points) AS data_points,
+                -- Median lap-over-lap delta: positive = getting slower = real deg
+                -- Filter: only consecutive stint laps (life_delta=1),
+                --         and cap outliers from SC/yellow laps
+                PERCENTILE_CONT(0.5) WITHIN GROUP (
+                    ORDER BY lap_delta_ms
+                ) AS median_deg_ms
+            FROM stint_deltas
+            WHERE life_delta = 1
+              AND lap_delta_ms BETWEEN -2000 AND 5000
             GROUP BY circuit_name
         ),
         pit_in_laps AS (
             SELECT
                 r.circuit_name,
-                -- Use 10th-percentile to avoid SC/formation lap outliers
                 PERCENTILE_CONT(0.1) WITHIN GROUP (ORDER BY l.lap_time_ms) AS p10_pit_in_ms
             FROM laps l
             JOIN Races r ON l.race_id = r.race_id
@@ -102,37 +97,42 @@ def extract_segmented_features():
               AND l.compound IN ('SOFT', 'MEDIUM', 'HARD')
               AND l.is_pit_in_lap = TRUE
               AND l.lap_time_ms   > 0
-              AND l.lap_time_ms   < 250000  -- cap outliers
+              AND l.lap_time_ms   < 250000
             GROUP BY r.circuit_name
         ),
         clean_median AS (
             SELECT
-                circuit_name,
-                PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY lap_time_ms) AS median_clean_ms
-            FROM clean_laps
-            WHERE tire_life BETWEEN 3 AND 15
-            GROUP BY circuit_name
+                r.circuit_name,
+                PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY l.lap_time_ms) AS median_clean_ms
+            FROM laps l
+            JOIN Races r ON l.race_id = r.race_id
+            WHERE r.year IN (2019, 2021, 2022, 2023, 2024, 2025)
+              AND r.had_rainfall    = FALSE
+              AND l.compound IN ('SOFT', 'MEDIUM', 'HARD')
+              AND l.is_pit_in_lap  = FALSE
+              AND l.is_pit_out_lap = FALSE
+              AND l.lap_time_ms BETWEEN 1000 AND 250000
+              AND l.tire_life BETWEEN 3 AND 15
+            GROUP BY r.circuit_name
         )
         SELECT
-            e.circuit_name,
-            dc.data_points,
-            -- deg = (worn median - fresh median) / 22 laps (window: 3-8 vs 20-35)
+            d.circuit_name,
+            d.data_points,
             GREATEST(
                 0,
-                ROUND((l.med_late - e.med_early) / 22.0)::int
+                ROUND(d.median_deg_ms)::int
             ) AS tire_deg_ms_per_lap,
             GREATEST(
                 0,
                 ROUND(p.p10_pit_in_ms - c.median_clean_ms)::int
             ) AS pit_loss_ms
-        FROM early_stint   e
-        JOIN late_stint    l  ON e.circuit_name = l.circuit_name
-        JOIN pit_in_laps   p  ON e.circuit_name = p.circuit_name
-        JOIN clean_median  c  ON e.circuit_name = c.circuit_name
-        JOIN data_counts   dc ON e.circuit_name = dc.circuit_name;
+        FROM deg_per_circuit  d
+        JOIN pit_in_laps      p ON d.circuit_name = p.circuit_name
+        JOIN clean_median     c ON d.circuit_name = c.circuit_name;
     """)
 
     # ── 2. SIMULATION CORE (2022–2025 Ground Effect era) ────────────────────
+
     query_simulation = text("""
         WITH clean_laps AS (
             SELECT
