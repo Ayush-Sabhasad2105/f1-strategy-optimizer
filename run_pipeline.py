@@ -1,15 +1,17 @@
 # run_pipeline.py
 import fastf1
+import time
 from src.data_pipeline.fetcher import fetch_race_data
-from src.data_pipeline.cleaner import clean_laps_data
+from src.data_pipeline.cleaner import clean_laps_data, clean_weather_data
+
 from src.data_pipeline.loader import load_race_data
 from src.data_pipeline.feature_extractor import extract_segmented_features
 
 def main():
     print("--- Starting Multi-Year ETL Pipeline ---")
     
-    # Loop through multiple historical seasons
-    years_to_process = range(2019, 2026)
+    # Loop through multiple historical seasons (starting from 2022 as requested)
+    years_to_process = range(2025, 2026)
     
     for year in years_to_process:
         print(f"\n=========================================")
@@ -30,9 +32,15 @@ def main():
             print(f" -> Processing {year} Round {round_num}: {event_name}")
             
             try:
-                race_info, raw_laps = fetch_race_data(year, round_num)
-                clean_laps = clean_laps_data(raw_laps)
-                load_race_data(race_info, clean_laps)
+                race_info, raw_laps, weather_df = fetch_race_data(year, round_num)
+                clean_laps    = clean_laps_data(raw_laps)
+                weather_summary = clean_weather_data(weather_df, raw_laps)
+                load_race_data(race_info, clean_laps, weather_summary)
+                if weather_summary['had_rainfall']:
+                    print(f"    [!] WET RACE detected — flagged in DB (had_rainfall=True)")
+
+                print("    [Zzz] Sleeping for 15 seconds to respect API limits...")
+                time.sleep(15)
                 
             except Exception as e:
                 print(f"    [!] FAILED to process {year} Round {round_num}. Error: {e}")

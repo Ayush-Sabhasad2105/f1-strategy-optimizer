@@ -13,22 +13,41 @@ def get_engine():
         raise ValueError("DATABASE_URL not found in environment variables.")
     return create_engine(db_url)
 
-def load_race_data(race_info, clean_laps):
-
-    """Loads race metadata, unique drivers, and laps into the database."""
+def load_race_data(race_info, clean_laps, weather_summary=None):
+    """Loads race metadata, weather summary, unique drivers, and laps into the database."""
     engine = get_engine()
     print("Connecting to database to load data....")
 
+    # Merge weather into race_info so the INSERT binds work cleanly
+    weather_defaults = {
+        'avg_track_temp_c': None,
+        'avg_air_temp_c':   None,
+        'avg_humidity_pct': None,
+        'had_rainfall':     False,
+    }
+    race_payload = {**race_info, **(weather_summary or weather_defaults)}
+
     with engine.connect() as conn:
 
-        # 1. Insert the Race and get the generated race_id
+        # 1. Insert the Race (with weather columns) and get the generated race_id
         race_query = text("""
-            INSERT INTO Races (year, round_number, circuit_name) 
-            VALUES (:year, :round_number, :circuit_name)
-            ON CONFLICT (year, round_number) DO UPDATE SET circuit_name = EXCLUDED.circuit_name
+            INSERT INTO Races (
+                year, round_number, circuit_name,
+                avg_track_temp_c, avg_air_temp_c, avg_humidity_pct, had_rainfall
+            )
+            VALUES (
+                :year, :round_number, :circuit_name,
+                :avg_track_temp_c, :avg_air_temp_c, :avg_humidity_pct, :had_rainfall
+            )
+            ON CONFLICT (year, round_number) DO UPDATE
+                SET circuit_name     = EXCLUDED.circuit_name,
+                    avg_track_temp_c = EXCLUDED.avg_track_temp_c,
+                    avg_air_temp_c   = EXCLUDED.avg_air_temp_c,
+                    avg_humidity_pct = EXCLUDED.avg_humidity_pct,
+                    had_rainfall     = EXCLUDED.had_rainfall
             RETURNING race_id;
         """)
-        result = conn.execute(race_query, race_info)
+        result = conn.execute(race_query, race_payload)
         row = result.fetchone()
 
         if row:

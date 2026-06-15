@@ -207,8 +207,6 @@ Solves the 3D MDP and runs 10,000 parallel Monte Carlo simulations for both AI a
 - [x] Integrate Safety Car probability as a stochastic input
 - [x] Upgrade to 3D MDP for "Dirty Air" traffic dodging
 - [x] Multi-driver / compound dynamic baselines (`starting_tire` injection)
-- [ ] Containerize with Docker and `docker-compose` for easier deployment
-- [ ] Move the 20,000 Monte Carlo loops to a Celery/Redis background task queue
-- [ ] Live DB integration — swap `track_data.py` static store for `get_track_features()`
+
 
 ---
