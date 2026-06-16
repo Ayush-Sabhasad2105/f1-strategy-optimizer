@@ -28,7 +28,7 @@ class StrategyRequest(BaseModel):
                                    description="Baseline lap time in ms")
     pit_loss:        int   = Field(24000, ge=10000, le=60000,
                                    description="Pit-lane delta in ms")
-    deg_penalty:     int   = Field(200,   ge=50,    le=800,
+    deg_penalty:     int   = Field(200,   ge=10,    le=800,
                                    description="Tire deg per lap in ms")
     sc_probability:  float = Field(0.02,  ge=0.0,   le=0.10,
                                    description="Safety Car probability per lap (0–10%)")
@@ -141,6 +141,13 @@ def compute_strategy(req: StrategyRequest):
         # Graceful fallback: use whatever the user submitted
         pit_loss      = req.pit_loss
         deg_penalty   = req.deg_penalty
+        
+    # Adjust generic tire degradation based on starting compound
+    # to simulate a Soft-heavy vs Hard-heavy strategy
+    if req.starting_tire == "Soft":
+        deg_penalty = int(deg_penalty * 1.25)
+    elif req.starting_tire == "Hard":
+        deg_penalty = int(deg_penalty * 0.85)
         cluster_id    = 0
         cluster_label = "Unknown (not in DB)"
         data_points   = None

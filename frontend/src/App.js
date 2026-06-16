@@ -247,7 +247,7 @@ export default function App() {
             </label>
             <input
               id="slider-deg-penalty"
-              type="range" min="50" max="600" step="10"
+              type="range" min="10" max="600" step="5"
               className="form-slider"
               value={params.deg_penalty}
               onChange={e => handleParamChange("deg_penalty", e.target.value)}
