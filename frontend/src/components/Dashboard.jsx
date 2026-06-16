@@ -361,7 +361,9 @@ export default function Dashboard({ result, tracks, selectedTrack, isLoading }) 
               </div>
               <div className="pit-timeline">
                 {result.mdp_reference_strategy.map(e => (
-                  <span key={e.lap} className="pit-chip mdp">L{e.lap}</span>
+                  <span key={e.lap} className={`pit-chip mdp compound-${e.label}`}>
+                    L{e.lap} {e.label && `[${e.label}]`}
+                  </span>
                 ))}
               </div>
             </div>

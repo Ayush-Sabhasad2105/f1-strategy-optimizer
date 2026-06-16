@@ -82,15 +82,7 @@ class TrackInfo(BaseModel):
 
 
 # ─── Helpers ───────────────────────────────────────────────────────────────────
-
-def _parse_pit_laps(strategy_strings: List[str]) -> List[int]:
-    laps = []
-    for s in strategy_strings:
-        try:
-            laps.append(int(s.split(" ")[1].rstrip(":")))
-        except (IndexError, ValueError):
-            pass
-    return laps
+# Removed _parse_pit_laps as get_optimal_strategy now returns dicts
 
 
 # ─── Routes ────────────────────────────────────────────────────────────────────
@@ -158,9 +150,8 @@ def compute_strategy(req: StrategyRequest):
     mdp.traffic_penalty = req.traffic_penalty
     mdp.solve()
 
-    ref_strings  = mdp.get_optimal_strategy()
-    ref_pit_laps = _parse_pit_laps(ref_strings)
-    ref_events   = [PitStopEvent(lap=l, label=f"Lap {l}: PIT") for l in ref_pit_laps]
+    ref_raw = mdp.get_optimal_strategy()
+    ref_events = [PitStopEvent(lap=e["lap"], label=e["compound"][0]) for e in ref_raw]
 
     # ── Step 2: Build simulator ───────────────────────────────────────────────
     simulator = RaceSimulator(
@@ -179,7 +170,10 @@ def compute_strategy(req: StrategyRequest):
         in_traffic   = 0
         sc_active    = False
         sc_remaining = 0
-        has_pitted   = False
+        
+        compound_map = {"Soft": 0, "Medium": 1, "Hard": 2}
+        current_comp = compound_map.get(req.starting_tire, 1)
+        has_switched = 0
 
         for lap in range(1, req.total_laps + 1):
             if not sc_active and np.random.random() < sc_prob:
@@ -191,16 +185,28 @@ def compute_strategy(req: StrategyRequest):
                     sc_active = False
 
             is_pitting = False
+            next_comp = current_comp
             if mdp_policy is not None:
                 safe_age     = min(tire_age, req.total_laps)
                 safe_traffic = min(in_traffic, 3)
-                action_code  = mdp_policy[lap - 1, safe_age, safe_traffic]
+                action_code  = mdp_policy[lap - 1, safe_age, safe_traffic, current_comp, has_switched]
+                
                 if sc_active and tire_age > 10:
                     is_pitting = True
+                    if action_code > 0:
+                        next_comp = action_code - 1
+                    else:
+                        next_comp = 2 if current_comp != 2 else 1
                 else:
-                    is_pitting = (action_code == 1)
+                    is_pitting = (action_code > 0)
+                    if is_pitting:
+                        next_comp = action_code - 1
             elif static_pit_laps is not None:
                 is_pitting = (lap in static_pit_laps)
+                if is_pitting:
+                    if current_comp == 0: next_comp = 2
+                    elif current_comp == 1: next_comp = 2
+                    else: next_comp = 1
 
             if is_pitting:
                 pit_var   = np.random.normal(0, 500)
@@ -211,7 +217,10 @@ def compute_strategy(req: StrategyRequest):
                 lap_time  = base_lap_time + pit_delta + pit_var + fumble
                 tire_age  = 1
                 in_traffic = 3
-                has_pitted = True
+                
+                if next_comp != current_comp:
+                    has_switched = 1
+                current_comp = next_comp
             else:
                 noise     = np.random.normal(0, 300)
                 dirty_air = (
@@ -222,16 +231,18 @@ def compute_strategy(req: StrategyRequest):
                     in_traffic -= 1
                 sc_pen   = 25000 if sc_active else 0
                 
-                # Apply compound modifiers to the first stint
+                # Apply compound modifiers
                 current_deg = deg_penalty
-                if not has_pitted:
-                    if req.starting_tire == "Soft":
-                        current_deg = int(deg_penalty * 2.0)
-                    elif req.starting_tire == "Hard":
-                        current_deg = int(deg_penalty * 0.75)
+                current_base = base_lap_time
+                if current_comp == 0: # Soft
+                    current_deg = int(deg_penalty * 2.0)
+                    current_base = base_lap_time - 600
+                elif current_comp == 2: # Hard
+                    current_deg = int(deg_penalty * 0.75)
+                    current_base = base_lap_time + 600
                 
                 lap_time = (
-                    base_lap_time
+                    current_base
                     + (tire_age * current_deg)
                     + noise + dirty_air + sc_pen
                 )
