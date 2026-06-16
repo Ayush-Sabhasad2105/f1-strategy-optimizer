@@ -207,15 +207,8 @@ def compute_strategy(req: StrategyRequest):
                 fumble    = 5000 if np.random.random() < 0.05 else 0
                 pit_delta = (pit_loss / 2) if sc_active else pit_loss
                 
-                # Calculate lap cost for the pit lap using current tire's stats
-                current_base = base_lap_time
-                if not has_pitted:
-                    if req.starting_tire == "Soft":
-                        current_base = base_lap_time - 600
-                    elif req.starting_tire == "Hard":
-                        current_base = base_lap_time + 600
-                
-                lap_time  = current_base + pit_delta + pit_var + fumble
+                # Calculate lap cost for the pit lap
+                lap_time  = base_lap_time + pit_delta + pit_var + fumble
                 tire_age  = 1
                 in_traffic = 3
                 has_pitted = True
@@ -230,18 +223,15 @@ def compute_strategy(req: StrategyRequest):
                 sc_pen   = 25000 if sc_active else 0
                 
                 # Apply compound modifiers to the first stint
-                current_base = base_lap_time
                 current_deg = deg_penalty
                 if not has_pitted:
                     if req.starting_tire == "Soft":
-                        current_base = base_lap_time - 600
-                        current_deg = deg_penalty + 60
+                        current_deg = int(deg_penalty * 2.0)
                     elif req.starting_tire == "Hard":
-                        current_base = base_lap_time + 600
-                        current_deg = max(10, deg_penalty - 15)
+                        current_deg = int(deg_penalty * 0.75)
                 
                 lap_time = (
-                    current_base
+                    base_lap_time
                     + (tire_age * current_deg)
                     + noise + dirty_air + sc_pen
                 )

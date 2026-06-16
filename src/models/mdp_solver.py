@@ -27,16 +27,14 @@ class RaceMDP:
         
         if is_first_stint:
             if self.starting_compound == "Soft":
-                current_deg = self.deg_penalty + 60
-                current_base = self.base_lap_time - 600
+                current_deg = int(self.deg_penalty * 2.0)
             elif self.starting_compound == "Hard":
-                current_deg = max(10, self.deg_penalty - 15)
-                current_base = self.base_lap_time + 600
+                current_deg = int(self.deg_penalty * 0.75)
         
         if action == 'Pit':
-            return current_base + self.pit_loss 
+            return self.base_lap_time + self.pit_loss 
         else:
-            return current_base + (tire_age * current_deg) + traffic_cost
+            return self.base_lap_time + (tire_age * current_deg) + traffic_cost
 
     def solve(self):
         self.V[self.total_laps, :, :] = 0 
