@@ -141,13 +141,6 @@ def compute_strategy(req: StrategyRequest):
         # Graceful fallback: use whatever the user submitted
         pit_loss      = req.pit_loss
         deg_penalty   = req.deg_penalty
-        
-    # Adjust generic tire degradation based on starting compound
-    # to simulate a Soft-heavy vs Hard-heavy strategy
-    if req.starting_tire == "Soft":
-        deg_penalty = int(deg_penalty * 1.25)
-    elif req.starting_tire == "Hard":
-        deg_penalty = int(deg_penalty * 0.85)
         cluster_id    = 0
         cluster_label = "Unknown (not in DB)"
         data_points   = None
@@ -160,6 +153,7 @@ def compute_strategy(req: StrategyRequest):
         base_lap_time=base_lap_time,
         pit_loss=pit_loss,
         deg_penalty=deg_penalty,
+        starting_compound=req.starting_tire,
     )
     mdp.traffic_penalty = req.traffic_penalty
     mdp.solve()
@@ -185,6 +179,7 @@ def compute_strategy(req: StrategyRequest):
         in_traffic   = 0
         sc_active    = False
         sc_remaining = 0
+        has_pitted   = False
 
         for lap in range(1, req.total_laps + 1):
             if not sc_active and np.random.random() < sc_prob:
@@ -211,9 +206,19 @@ def compute_strategy(req: StrategyRequest):
                 pit_var   = np.random.normal(0, 500)
                 fumble    = 5000 if np.random.random() < 0.05 else 0
                 pit_delta = (pit_loss / 2) if sc_active else pit_loss
-                lap_time  = base_lap_time + pit_delta + pit_var + fumble
+                
+                # Calculate lap cost for the pit lap using current tire's stats
+                current_base = base_lap_time
+                if not has_pitted:
+                    if req.starting_tire == "Soft":
+                        current_base = base_lap_time - 600
+                    elif req.starting_tire == "Hard":
+                        current_base = base_lap_time + 600
+                
+                lap_time  = current_base + pit_delta + pit_var + fumble
                 tire_age  = 1
                 in_traffic = 3
+                has_pitted = True
             else:
                 noise     = np.random.normal(0, 300)
                 dirty_air = (
@@ -223,9 +228,21 @@ def compute_strategy(req: StrategyRequest):
                 if in_traffic > 0:
                     in_traffic -= 1
                 sc_pen   = 25000 if sc_active else 0
+                
+                # Apply compound modifiers to the first stint
+                current_base = base_lap_time
+                current_deg = deg_penalty
+                if not has_pitted:
+                    if req.starting_tire == "Soft":
+                        current_base = base_lap_time - 600
+                        current_deg = deg_penalty + 60
+                    elif req.starting_tire == "Hard":
+                        current_base = base_lap_time + 600
+                        current_deg = max(10, deg_penalty - 15)
+                
                 lap_time = (
-                    base_lap_time
-                    + (tire_age * deg_penalty)
+                    current_base
+                    + (tire_age * current_deg)
                     + noise + dirty_air + sc_pen
                 )
                 tire_age += 1
